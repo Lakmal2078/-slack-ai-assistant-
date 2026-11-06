@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id          String         @id // Slack team_id
+  name        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  users       User[]
+  threads     Conversation[]
+  messages    Message[]
+  memories    Memory[]
+  approvals   Approval[]
+  toolCalls   ToolCall[]
+}
+
+model User {
+  id          String        @id // Slack user_id
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  displayName String?
+  isAllowed   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  memories    Memory[]
+  approvals   Approval[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channelId   String
+  threadTs    String
+  userId      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messages    Message[]
+
+  @@unique([workspaceId, channelId, threadTs])
+  @@index([workspaceId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String       @db.Text
+  slackTs        String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+model Memory {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  content     String    @db.Text
+  source      String    @default("conversation")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId, userId, updatedAt])
+}
+
+model Approval {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User      @relation(fields: [requesterId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  channelId   String
+  threadTs    String
+  toolName    String
+  arguments   Json
+  status      String    @default("PENDING")
+  expiresAt   DateTime
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  result      Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, status, expiresAt])
+}
+
+model ToolCall {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  toolName    String
+  arguments   Json
+  status      String
+  result      Json?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+}
